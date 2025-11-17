@@ -1,0 +1,59 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app
+    env_file:
+      - .env
+    secrets:
+      - bot_token
+      - tg_api_hash
+      - tg_api_id
+      - tg_session
+      - redis_password
+    depends_on:
+      - redis
+    ports:
+      - "8888:888"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      BOT__TOKEN_FILE: /run/secrets/bot_token
+      TG_CLIENT__API_HASH_FILE: /run/secrets/tg_api_hash
+      TG_CLIENT__API_ID_FILE: /run/secrets/tg_api_id
+      TG_CLIENT__SESSION_FILE: /run/secrets/tg_session
+      REDIS__PASSWORD_FILE: /run/secrets/redis_password
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: redis_client
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    secrets:
+      - redis_password
+    command: >
+      sh -c 'redis-server --requirepass "$$(cat /run/secrets/redis_password)"'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "$$(cat /run/secrets/redis_password)", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+secrets:
+  bot_token:
+    file: ./secrets/bot_token.txt
+  tg_api_hash:
+    file: ./secrets/tg_api_hash.txt
+  tg_api_id:
+    file: ./secrets/tg_api_id.txt
+  tg_session:
+    file: ./secrets/tg_session.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+
+volumes:
+  redis_data:

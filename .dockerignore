@@ -1,0 +1,6 @@
+.env
+__pycache__/
+.git/
+poetry.lock
+venv1/
+secrets
