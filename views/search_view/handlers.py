@@ -31,6 +31,8 @@ async def search_messages_handler(
             await send_media(bot, media_group, chat_id)
         except TelegramRetryAfter as e:
             logger.warning("Telegram Retry - Flood wait", time=e.retry_after)
+            if e.retry_after > 10:
+                raise TelegramRetryAfter
             await asyncio.sleep(e.retry_after)
             await send_media(bot, media_group, chat_id)
 
@@ -59,14 +61,20 @@ async def send_results(
 
     has_next = len(media_groups) > page_size
 
-    await search_messages_handler(
-        bot=bot,
-        session=session,
-        search=search,
-        chat_id=message.chat.id,
-        limit=page_size,
-        offset=offset,
-    )
+    try:
+        await search_messages_handler(
+            bot=bot,
+            session=session,
+            search=search,
+            chat_id=message.chat.id,
+            limit=page_size,
+            offset=offset,
+        )
+    except TelegramRetryAfter:
+        await message.answer(
+            "❗Слишком быстрая отправка сообщений Telegram Flood Wait.\nОтправка медиа Завершена"
+        )
+        return
 
     if has_next:
         next_offset = offset + page_size
