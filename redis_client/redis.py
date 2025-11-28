@@ -38,8 +38,24 @@ class AsyncRedisClient:
             await cls.initialize()
         return cls._client
 
+    @classmethod
+    async def close(cls):
+        if cls._client is None:
+            return
+
+        try:
+            await cls._client.close()
+        except Exception as e:
+            logging.warning(f"Ошибка при закрытии Redis: {e}")
+
+        cls._client = None
+
 
 async def set_async_redis_client() -> Redis:
     client = await AsyncRedisClient.initialize()
     logger.info("AsyncRedisClient is setting...")
     return client
+
+
+async def redis_client_close() -> None:
+    await AsyncRedisClient.close()
