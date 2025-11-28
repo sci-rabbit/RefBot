@@ -1,8 +1,9 @@
-import logging
+import structlog
 from aiogram import types, Dispatcher
 from aiogram.types import ErrorEvent
+from sqlalchemy.exc import DatabaseError
 
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 
 async def global_error_handler(event: ErrorEvent):
@@ -18,12 +19,22 @@ async def global_error_handler(event: ErrorEvent):
         callback = event.update
         user = callback.from_user
 
-    logger.exception(
-        "⚠️ Ошибка при обработке event=%r от пользователя=%r: %s",
-        event.update,
-        user,
-        exception,
-    )
+    if isinstance(exception, DatabaseError):
+        logger.exception(
+            "⚠️ Непредвиденная ошибка базы данных",
+            event=event.update,
+            user=user,
+            error=str(exception),
+            exc_info=True,
+        )
+    else:
+        logger.exception(
+            "⚠️ Ошибка при обработке:",
+            event=event.update,
+            user=user,
+            error=str(exception),
+            exc_info=True,
+        )
 
     try:
         if message:
@@ -31,7 +42,9 @@ async def global_error_handler(event: ErrorEvent):
         elif callback:
             await callback.answer("⚠️ Ошибка при выполнении запроса.", show_alert=True)
     except Exception as e:
-        logger.warning("Не удалось отправить сообщение об ошибке: %s", e)
+        logger.warning(
+            "Не удалось отправить сообщение об ошибке", error=str(e), exc_info=True
+        )
 
     return True
 
@@ -43,8 +56,10 @@ def register_error_handlers(dp: Dispatcher):
 def setup_async_exception_handler(loop):
     def handle_exception(loop, context):
         msg = context.get("exception", context["message"])
-        logging.error(
-            f"💥 Непойманное async-исключение: {msg}", exc_info=context.get("exception")
+        logger.error(
+            "💥 Непойманное async-исключение",
+            msg=msg,
+            exc_info=context.get("exception"),
         )
 
     loop.set_exception_handler(handle_exception)
