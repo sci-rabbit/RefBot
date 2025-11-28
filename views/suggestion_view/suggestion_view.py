@@ -1,7 +1,7 @@
 import asyncio
 import json
-import logging
 
+import structlog
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
@@ -14,7 +14,7 @@ from src.bot import bot
 from core.states.suggestion_state import SuggestionStates
 from views.suggestion_view.utils import collect_media, process_state_photo
 
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 suggestion_router = Router()
 
@@ -40,8 +40,8 @@ async def suggestion_view(message: Message):
         reply_markup=suggestion_reply_kb,
     )
     logger.info(
-        "[Предложка] Пользователь %r открыл меню предложки.",
-        message.from_user.id,
+        "[Предложка] Пользователь открыл меню предложки.",
+        user=message.from_user.id,
     )
 
 
@@ -53,8 +53,8 @@ async def suggest_add(
     await state.set_state(SuggestionStates.waiting_for_photos)
     await message.answer("Отправь ваши фото для предложки 💬")
     logger.info(
-        "[Добавить] Пользователь %r начал добавление фото.",
-        message.from_user.id,
+        "[Добавить] Пользователь начал добавление фото.",
+        user=message.from_user.id,
     )
 
 
@@ -68,8 +68,8 @@ async def suggest_view(
     if not keys:
         await message.answer("📭 Нет предложенных фото для просмотра.")
         logger.info(
-            "[Просмотр] Админ %r: нет данных.",
-            message.from_user.id,
+            "[Просмотр]: нет данных.",
+            admin=message.from_user.id,
         )
         return
 
@@ -87,9 +87,9 @@ async def suggest_view(
             reply_markup=get_inline_publish_kb(key),
         )
         logger.info(
-            "[Просмотр] Админ %r просмотрел %r.",
-            message.from_user.id,
-            key,
+            "[Просмотр] Админ перешёл в меню публикации.",
+            admin=message.from_user.id,
+            key=key,
         )
 
 
