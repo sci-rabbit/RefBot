@@ -10,4 +10,4 @@ RUN pip install --no-cache-dir poetry \
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "run.py"]
+CMD ["sh", "-c", "alembic upgrade head && python run.py"]

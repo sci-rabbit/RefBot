@@ -13,6 +13,7 @@ services:
       - tg_session
       - redis_password
     depends_on:
+      - db
       - redis
     ports:
       - "8888:888"
@@ -24,6 +25,19 @@ services:
       TG_CLIENT__API_ID_FILE: /run/secrets/tg_api_id
       TG_CLIENT__SESSION_FILE: /run/secrets/tg_session
       REDIS__PASSWORD_FILE: /run/secrets/redis_password
+
+  db:
+    image: postgres:17-alpine
+    container_name: postgres17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB__USER}
+      POSTGRES_PASSWORD: ${DB__PASSWORD}
+      POSTGRES_DB: ${DB__NAME}
+    ports:
+      - "${DB__PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7.4-alpine
@@ -57,3 +71,4 @@ secrets:
 
 volumes:
   redis_data:
+  postgres_data:
