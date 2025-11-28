@@ -1,92 +1,78 @@
-import logging
-from collections import defaultdict
+import asyncio
 
-from config import settings
+import structlog
+from aiogram.exceptions import TelegramRetryAfter
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.keyboards.search_kb import get_inline_search_kb
-from views.search_view.utils import send_media, match_messages
+from core.media_utils import send_media
+from core.services.search_service import SearchService
 
-logger = logging.getLogger(__name__)
+logger = structlog.getLogger(__name__)
 
 
-async def search_message_processor(
-    client,
-    search,
-    limit,
-    offset_id,
-    source_chat: int = settings.bot.source_chat,
-):
-    albums = defaultdict(list)
-    grouped_ids = set()
-
-    logger.info(
-        "🔍 Начало поиска: search=%r, offset=%r, limit=%r, chat=%r",
-        search,
-        offset_id,
-        limit,
-        source_chat,
+async def search_messages_handler(
+    bot,
+    session: AsyncSession,
+    search: str,
+    chat_id: int,
+    limit: int = 30,
+    offset: int = 0,
+) -> None:
+    search_service = SearchService(session=session)
+    media_groups = await search_service.get_messages(
+        search=search,
+        limit=limit,
+        offset=offset,
     )
 
-    async for msg in client.iter_messages(
-        source_chat,
-        limit=limit,
-        offset_id=offset_id,
-        reverse=True,
-    ):
-        match = await match_messages(search, msg)
-        logger.debug(
-            f"MSG %r group=%r match=%r media=%r",
-            msg.id,
-            msg.grouped_id,
-            match,
-            bool(msg.media),
-        )
-        if not msg.media:
-            continue
-
-        group_id = msg.grouped_id or msg.id
-        if match or group_id in grouped_ids:
-            grouped_ids.add(group_id)
-            albums[group_id].append(msg)
-
-    logger.info("✅ Поиск завершён: собрано %r сообщений", len(albums))
-
-    return albums
+    for media_group in media_groups:
+        try:
+            await send_media(bot, media_group, chat_id)
+        except TelegramRetryAfter as e:
+            logger.warning("Telegram Retry - Flood wait", time=e.retry_after)
+            await asyncio.sleep(e.retry_after)
+            await send_media(bot, media_group, chat_id)
 
 
 async def send_results(
     bot,
-    albums,
+    session: AsyncSession,
+    search: str,
     message,
     state=None,
-    count: int = 0,
+    offset: int = 0,
+    page_size: int = 30,
 ):
-    keys = list(albums.keys())
-    end = min(count + 50, len(keys))
-
     logger.info(
-        "Начало отправки результатов %r, Счётчик пагинации: count=%r end=%r",
+        "Начало отправки результатов chat_id=%r, offset=%r, page_size=%r",
         message.chat.id,
-        count,
-        end,
+        offset,
+        page_size,
     )
-    for i in range(count, end):
-        count += 1
-        await send_media(
-            bot,
-            albums[keys[i]],
-            message.chat.id,
-        )
-    count = end
-    logger.debug(
-        "Отправка медиа завершена, sent_count=%r",
-        count,
+
+    media_groups = await SearchService(session=session).get_messages(
+        search=search,
+        limit=page_size + 1,
+        offset=offset,
     )
-    if 0 < count < len(keys):
+
+    has_next = len(media_groups) > page_size
+
+    await search_messages_handler(
+        bot=bot,
+        session=session,
+        search=search,
+        chat_id=message.chat.id,
+        limit=page_size,
+        offset=offset,
+    )
+
+    if has_next:
+        next_offset = offset + page_size
         await message.answer(
             "Есть ещё сообщения, хотите продолжить?",
-            reply_markup=get_inline_search_kb(
-                count,
-            ),
+            reply_markup=get_inline_search_kb(next_offset),
         )
     else:
         if state:
@@ -94,6 +80,8 @@ async def send_results(
         await message.answer("✅ Это всё!")
 
     logger.info(
-        "Отправка результатов завершена, %r",
+        "Отправка результатов завершена, chat_id=%r, offset=%r, total_fetched=%r",
         message.chat.id,
+        offset,
+        len(media_groups),
     )
