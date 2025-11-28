@@ -35,6 +35,27 @@ class RedisConfig(BaseModel):
     port: str
     ONE_WEEK: int = 60 * 60 * 24 * 7
 
+    limit: int = 7
+    period: int = 10
+
+class SearchConfig(BaseModel):
+    page_size: int = 30
+
+class DatabaseConfig(BaseModel):
+    echo: bool = False
+    echo_pool: bool = False
+    pool_size: int = 50
+    max_overflow: int = 10
+    user: str
+    password: str
+    host: str
+    port: int
+    name: str
+
+    @property
+    def url(self) -> str:
+        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -46,8 +67,7 @@ class Settings(BaseSettings):
     bot: BotConfig
     tg_client: TgClientConfig
     redis: RedisConfig
+    db: DatabaseConfig
+    search: SearchConfig = SearchConfig()
 
-    limit: int = 5000
-    
-    
 settings = Settings()
