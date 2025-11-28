@@ -1,11 +1,16 @@
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 
+from config import settings
 from redis_client.redis import AsyncRedisClient
 
 
 class RateLimitMiddleware(BaseMiddleware):
-    def __init__(self, limit: int = 5, period: int = 10):
+    def __init__(
+        self,
+        limit: int = settings.redis.limit,
+        period: int = settings.redis.period,
+    ):
         self.limit = limit
         self.period = period
         super().__init__()
