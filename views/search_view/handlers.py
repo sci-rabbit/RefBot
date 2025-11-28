@@ -32,7 +32,7 @@ async def search_messages_handler(
         except TelegramRetryAfter as e:
             logger.warning("Telegram Retry - Flood wait", time=e.retry_after)
             if e.retry_after > 10:
-                raise TelegramRetryAfter
+                raise
             await asyncio.sleep(e.retry_after)
             await send_media(bot, media_group, chat_id)
 
