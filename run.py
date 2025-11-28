@@ -5,11 +5,12 @@ import structlog
 from aiogram import Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from core.db.database import get_session
+from core.db.database import dispose
 from core.db.db_filler import db_filler
 from error_handler import register_error_handlers, setup_async_exception_handler
-from middleware import RateLimitMiddleware
-from redis_client.redis import set_async_redis_client
+from health_monitors import health_monitor_task, _check_db
+from middleware import rate_middleware
+from redis_client.redis import set_async_redis_client, redis_client_close
 from src.bot import bot
 from src.tg_client import tg_client
 from views import router
@@ -28,37 +29,49 @@ logging.basicConfig(
 logger = structlog.getLogger(__name__)
 
 dp = Dispatcher(storage=MemoryStorage())
-dp.message.middleware(RateLimitMiddleware())
-dp.callback_query.middleware(RateLimitMiddleware())
+
+dp.message.middleware(rate_middleware)
+dp.callback_query.middleware(rate_middleware)
 
 
 async def on_startup() -> None:
     await set_async_redis_client()
     await tg_client.start()
-    logger.info("ТГ клиент успешно запущен")
-    logger.info()
-    async with get_session() as session:
-        await db_filler(
-            session=session,
-            client=tg_client,
+    logger.info("Startup completed")
+
+    db_ok = await _check_db()
+    if db_ok:
+        asyncio.create_task(
+            db_filler(
+                client=tg_client,
+            )
         )
 
 
 async def on_shutdown():
     await tg_client.disconnect()
-    logger.info("ТГ клиент успешно завершён")
+    await redis_client_close()
+    await dispose()
+    logger.info("Shutdown completed")
 
 
 async def main():
     register_error_handlers(dp)
-    dp.include_router(router=router)
+    dp.include_router(router)
+
+    stop_event = asyncio.Event()
+    health_task = asyncio.create_task(health_monitor_task(stop_event))
+
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    await dp.start_polling(bot)
+
+    try:
+        await dp.start_polling(bot)
+    finally:
+        stop_event.set()
+        await health_task
 
 
 if __name__ == "__main__":
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    setup_async_exception_handler(loop)
-    loop.run_until_complete(main())
+    setup_async_exception_handler(asyncio.get_event_loop())
+    asyncio.run(main())
