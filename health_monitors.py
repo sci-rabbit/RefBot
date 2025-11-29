@@ -2,7 +2,7 @@ import asyncio
 
 import structlog
 
-from core.db.database import get_session
+from core.db.database import get_ro_session
 from redis_client.redis import AsyncRedisClient
 from src.tg_client import tg_client
 
@@ -22,7 +22,7 @@ async def _check_redis() -> bool:
 
 async def _check_db() -> bool:
     try:
-        async with get_session() as session:
+        async with get_ro_session() as session:
             await session.execute("SELECT 1")
         return True
     except Exception:

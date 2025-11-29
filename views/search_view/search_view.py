@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 
 from config import settings
-from core.db.database import get_session
+from core.db.database import get_ro_session
 from core.states.search_state import SearchStates
 from views.search_view.handlers import send_results
 
@@ -39,7 +39,7 @@ async def process_search(message: Message, state: FSMContext):
 
     await state.set_state(SearchStates.albums)
 
-    async with get_session() as session:
+    async with get_ro_session() as session:
         await send_results(
             bot=message.bot,
             session=session,
@@ -68,7 +68,7 @@ async def next_page_handler(callback: CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.answer("Загружаю следующую страницу...")
 
-    async with get_session() as session:
+    async with get_ro_session() as session:
         await send_results(
             bot=callback.bot,
             session=session,

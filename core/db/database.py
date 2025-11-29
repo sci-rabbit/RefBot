@@ -40,3 +40,8 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         except Exception:
             await session.rollback()
             raise
+
+@asynccontextmanager
+async def get_ro_session() -> AsyncIterator[AsyncSession]:
+    async with async_session() as session:
+            yield session
